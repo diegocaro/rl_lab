@@ -27,8 +27,8 @@ from pendulum import MAX_TORQUE, Pendulum, PendulumRenderer
 
 # ── Q-learning hyper-parameters ────────────────────────────────────────────────
 MAX_SPEED = 16.0  # rad/s — discretization bound for the Q-table speed bins
-N_ANGLE = 32      # angle bins   (–π … π)
-N_SPEED = 32      # speed bins   (–MAX_SPEED … MAX_SPEED)
+N_ANGLE = 32  # angle bins   (–π … π)
+N_SPEED = 32  # speed bins   (–MAX_SPEED … MAX_SPEED)
 ACTIONS = np.linspace(-MAX_TORQUE, MAX_TORQUE, 9)  # 9 actions
 N_ACTS = len(ACTIONS)
 
@@ -159,11 +159,18 @@ def draw_pendulum(
     mode_str = "TRAINING" if training else "WATCHING"
     mode_col = WARN_C if training else BOB_UP_C
     mode_surf = font_big.render(mode_str, True, mode_col)
-    screen.blit(mode_surf, (W - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20))
+    screen.blit(
+        mode_surf, (W - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20)
+    )
 
     y0 = 360
     txt("Episode:", f"{episode}")
     txt("Step:", f"{step} / {MAX_STEPS}")
+    txt(
+        "Angle (deg):",
+        f"{math.degrees(theta):+.1f}",
+        col=BOB_UP_C if upright else WARN_C,
+    )
     txt("Upright time:", f"{reward_total:.0f} steps")
     txt("Epsilon:", f"{epsilon:.3f}")
     txt("FPS:", f"{fps_actual:.0f}")
