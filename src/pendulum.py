@@ -24,8 +24,8 @@ import sys
 
 # ── Physics constants ──────────────────────────────────────────────────────────
 G = 9.81  # gravity   (m/s²)
-L = 1.0   # length    (m)
-M = 1.0   # mass      (kg)
+L = 1.0  # length    (m)
+M = 1.0  # mass      (kg)
 B = 0.05  # damping   (N·m·s)
 DT = 0.02  # timestep  (s)
 MAX_TORQUE = 20.0  # N·m
@@ -52,31 +52,33 @@ class Pendulum:
         self.terminated = False
 
     def reset(self, theta=math.pi, theta_dot=0.0):
-        """Set state directly; defaults to hanging at rest."""
-        # Wrap theta to (-π, π] so the state is consistent with what step() returns
+        """Set state directly; defaults to hanging at rest.
+
+        Returns:
+            theta – initial angle (rad), wrapped to (−π, π]
+        """
         self.theta = (float(theta) + math.pi) % (2 * math.pi) - math.pi
         self.theta_dot = float(theta_dot)
         self.terminated = False
-        return self.theta, self.theta_dot
+        return self.theta
 
     def step(self, torque):
         """Apply torque (N·m) for one timestep DT.
 
         Returns:
             theta      – new angle (rad), wrapped to (−π, π]
-            theta_dot  – new angular velocity (rad/s)
             terminated – True if the pendulum broke (|θ̇| > max_speed)
         """
         th, td = self.theta, self.theta_dot
         th_ddot = (
-            (G / L) * math.sin(th)     # gravity: pulls toward bottom
-            - (B / (M * L**2)) * td   # damping: opposes motion (friction at pivot)
-            + torque / (M * L**2)     # applied torque
+            (G / L) * math.sin(th)  # gravity: pulls toward bottom
+            - (B / (M * L**2)) * td  # damping: opposes motion (friction at pivot)
+            + torque / (M * L**2)  # applied torque
         )
         self.theta_dot = td + th_ddot * DT
         self.theta = (th + self.theta_dot * DT + math.pi) % (2 * math.pi) - math.pi
         self.terminated = abs(self.theta_dot) > self.max_speed
-        return self.theta, self.theta_dot, self.terminated
+        return self.theta, self.terminated
 
 
 class PendulumRenderer:
@@ -94,17 +96,19 @@ class PendulumRenderer:
         frame = renderer.get_frame()            # numpy (H, W, 3) for CV
     """
 
-    BG       = (15, 17, 26)
-    ROD_C    = (160, 180, 220)
-    PIVOT_C  = (200, 200, 220)
-    BOB_C    = (80, 180, 255)
-    BOB_UP_C = (80, 255, 140)   # green — upright bob and angle label
-    TEXT_C   = (200, 210, 230)
-    HINT_C   = (90, 100, 120)
-    THETA_C  = (255, 80, 80)    # red   — angle label when not upright
-    TORQUE_C = (255, 180, 50)   # orange — torque label
+    BG = (15, 17, 26)
+    ROD_C = (160, 180, 220)
+    PIVOT_C = (200, 200, 220)
+    BOB_C = (80, 180, 255)
+    BOB_UP_C = (80, 255, 140)  # green — upright bob and angle label
+    TEXT_C = (200, 210, 230)
+    HINT_C = (90, 100, 120)
+    THETA_C = (255, 80, 80)  # red   — angle label when not upright
+    TORQUE_C = (255, 180, 50)  # orange — torque label
 
-    def __init__(self, width=480, height=480, cx=None, cy=None, scale=160, show_hud=False):
+    def __init__(
+        self, width=480, height=480, cx=None, cy=None, scale=160, show_hud=False
+    ):
         """
         width, height – size of the off-screen surface in pixels.
 
@@ -121,11 +125,12 @@ class PendulumRenderer:
                     testing; disable when the caller draws its own HUD.
         """
         import pygame
+
         self.W = width
         self.H = height
-        self.CX = cx if cx is not None else width // 2   # pivot x
+        self.CX = cx if cx is not None else width // 2  # pivot x
         self.CY = cy if cy is not None else height // 2  # pivot y
-        self.PX_LEN = scale   # pixels per metre
+        self.PX_LEN = scale  # pixels per metre
         self.show_hud = show_hud
         self.PIVOT_R = 7
         self.BOB_R = 15
@@ -134,6 +139,7 @@ class PendulumRenderer:
 
     def draw(self, theta, theta_dot, torque):
         import pygame
+
         surf = self.surface
         surf.fill(self.BG)
 
@@ -143,16 +149,18 @@ class PendulumRenderer:
         upright = abs(theta) < 0.2
         pygame.draw.line(surf, self.ROD_C, (self.CX, self.CY), (bx, by), 4)
         pygame.draw.circle(surf, self.PIVOT_C, (self.CX, self.CY), self.PIVOT_R)
-        pygame.draw.circle(surf, self.BOB_UP_C if upright else self.BOB_C, (bx, by), self.BOB_R)
+        pygame.draw.circle(
+            surf, self.BOB_UP_C if upright else self.BOB_C, (bx, by), self.BOB_R
+        )
         pygame.draw.circle(surf, (255, 255, 255), (bx, by), self.BOB_R, 2)
 
         if self.show_hud:
             # ── HUD top-left: dynamic state ──
             angle_col = self.BOB_UP_C if upright else self.THETA_C
             hud = [
-                (f"theta:     {math.degrees(theta):+7.2f} deg", angle_col),
-                (f"theta_dot: {theta_dot:+7.2f} rad/s",         self.TEXT_C),
-                (f"torque:    {torque:+7.1f} N·m",              self.TORQUE_C),
+                (f"theta:     {theta:+.4f} rad", angle_col),
+                (f"theta_dot: {theta_dot:+7.2f} rad/s", self.TEXT_C),
+                (f"torque:    {torque:+7.1f} N·m", self.TORQUE_C),
             ]
             for i, (line, col) in enumerate(hud):
                 surf.blit(self.font.render(line, True, col), (12, 12 + i * 20))
@@ -170,6 +178,7 @@ class PendulumRenderer:
         """Return the current surface as a (H, W, 3) numpy array."""
         import numpy as np
         import pygame
+
         return pygame.surfarray.array3d(self.surface).transpose(1, 0, 2)
 
 
@@ -188,7 +197,7 @@ def main():
 
     renderer = PendulumRenderer(width=W, height=H, show_hud=True)
     pend = Pendulum()
-    theta, theta_dot = pend.reset(theta=math.pi, theta_dot=0.0)
+    theta = pend.reset(theta=math.pi, theta_dot=0.0)
     terminated = False
     torque = 0.0
 
@@ -202,7 +211,7 @@ def main():
                     pygame.quit()
                     sys.exit()
                 if event.key == pygame.K_r:
-                    theta, theta_dot = pend.reset(theta=math.pi, theta_dot=0.0)
+                    theta = pend.reset(theta=math.pi, theta_dot=0.0)
                     terminated = False
 
         if not terminated:
@@ -212,13 +221,17 @@ def main():
                 torque = +MAX_TORQUE
             if keys[pygame.K_LEFT]:
                 torque = -MAX_TORQUE
-            theta, theta_dot, terminated = pend.step(torque)
+            theta, terminated = pend.step(torque)
 
-        renderer.draw(theta, theta_dot, torque)
+        renderer.draw(theta, pend.speed, torque)
         screen.blit(renderer.surface, (0, 0))
 
         if terminated:
-            msg = font.render(f"BROKEN: speed exceeded {pend.max_speed:.0f} rad/s — press R", True, (255, 80, 80))
+            msg = font.render(
+                f"BROKEN: speed exceeded {pend.max_speed:.0f} rad/s — press R",
+                True,
+                (255, 80, 80),
+            )
             screen.blit(msg, ((W - msg.get_width()) // 2, H // 2))
 
         hint = font.render("LEFT/RIGHT: torque   R: reset   Q: quit", True, HINT_C)
