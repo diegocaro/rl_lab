@@ -60,7 +60,7 @@ class Pendulum:
         self.theta = (float(theta) + math.pi) % (2 * math.pi) - math.pi
         self.theta_dot = float(theta_dot)
         self.terminated = False
-        return self.theta
+        return self.theta, self.theta_dot
 
     def step(self, torque):
         """Apply torque (N·m) for one timestep DT.
@@ -78,7 +78,7 @@ class Pendulum:
         self.theta_dot = td + th_ddot * DT
         self.theta = (th + self.theta_dot * DT + math.pi) % (2 * math.pi) - math.pi
         self.terminated = abs(self.theta_dot) > self.max_speed
-        return self.theta, self.terminated
+        return self.theta, self.theta_dot, self.terminated
 
 
 class PendulumRenderer:
@@ -197,7 +197,7 @@ def main():
 
     renderer = PendulumRenderer(width=W, height=H, show_hud=True)
     pend = Pendulum()
-    theta = pend.reset(theta=math.pi, theta_dot=0.0)
+    theta, theta_dot = pend.reset(theta=math.pi, theta_dot=0.0)
     terminated = False
     torque = 0.0
 
@@ -221,9 +221,9 @@ def main():
                 torque = +MAX_TORQUE
             if keys[pygame.K_LEFT]:
                 torque = -MAX_TORQUE
-            theta, terminated = pend.step(torque)
+            theta, theta_dot, terminated = pend.step(torque)
 
-        renderer.draw(theta, pend.theta_dot, torque)
+        renderer.draw(theta, theta_dot, torque)
         screen.blit(renderer.surface, (0, 0))
 
         if terminated:
