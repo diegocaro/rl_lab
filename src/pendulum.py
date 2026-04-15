@@ -55,7 +55,7 @@ class Pendulum:
         """Set state directly; defaults to hanging at rest.
 
         Returns:
-            theta – initial angle (rad), wrapped to (−π, π]
+            (theta, theta_dot) – initial angle (rad) and angular velocity (rad/s)
         """
         self.theta = (float(theta) + math.pi) % (2 * math.pi) - math.pi
         self.theta_dot = float(theta_dot)
@@ -66,7 +66,9 @@ class Pendulum:
         """Apply torque (N·m) for one timestep DT.
 
         Returns:
+            (theta, theta_dot, terminated)
             theta      – new angle (rad), wrapped to (−π, π]
+            theta_dot  – new angular velocity (rad/s)
             terminated – True if the pendulum broke (|θ̇| > max_speed)
         """
         th, td = self.theta, self.theta_dot
@@ -211,7 +213,7 @@ def main():
                     pygame.quit()
                     sys.exit()
                 if event.key == pygame.K_r:
-                    theta = pend.reset(theta=math.pi, theta_dot=0.0)
+                    theta, theta_dot = pend.reset(theta=math.pi, theta_dot=0.0)
                     terminated = False
 
         if not terminated:

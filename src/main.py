@@ -16,6 +16,7 @@ Controls:
   Q      – quit
 """
 
+import argparse
 import math
 import sys
 import time
@@ -25,8 +26,20 @@ import pygame
 
 from pendulum import MAX_TORQUE, Pendulum, PendulumRenderer
 
+# ── CLI arguments (parsed before pygame so --help never opens a window) ──────────────────
+_parser = argparse.ArgumentParser(description="Q-Learning Pendulum Balancer")
+_parser.add_argument(
+    "--no-speed",
+    action="store_true",
+    help="Ignore angular velocity in the state (angle-only Q-table).",
+)
+_args = _parser.parse_args()
+USE_SPEED = not _args.no_speed
+
 # ── Q-learning hyper-parameters ────────────────────────────────────────────────
 N_ANGLE = 32  # angle bins   (–π … π)
+N_SPEED = 16  # angular velocity bins  (–MAX_SPEED … +MAX_SPEED)
+MAX_SPEED = 20.0  # must match Pendulum.max_speed default
 ACTIONS = np.linspace(-MAX_TORQUE, MAX_TORQUE, 9)  # 9 actions
 N_ACTS = len(ACTIONS)
 
@@ -40,16 +53,20 @@ MAX_STEPS = 500  # steps per episode
 
 # ── Discretisation helpers ─────────────────────────────────────────────────────
 angle_bins = np.linspace(-math.pi, math.pi, N_ANGLE + 1)
+speed_bins = np.linspace(-MAX_SPEED, MAX_SPEED, N_SPEED + 1)
 
 
-def discretise(theta):
-    """Return a state tuple (angle_bin,) used to index the Q-table."""
+def discretise(theta, theta_dot=0.0):
+    """Return a state tuple (angle_bin, [speed_bin]) used to index the Q-table."""
     a = int(np.clip(np.digitize(theta, angle_bins) - 1, 0, N_ANGLE - 1))
+    if USE_SPEED:
+        v = int(np.clip(np.digitize(theta_dot, speed_bins) - 1, 0, N_SPEED - 1))
+        return (a, v)
     return (a,)
 
 
 # ── Q-table ────────────────────────────────────────────────────────────────────
-Q = np.zeros((N_ANGLE, N_ACTS))
+Q = np.zeros((N_ANGLE, N_SPEED, N_ACTS)) if USE_SPEED else np.zeros((N_ANGLE, N_ACTS))
 
 
 def choose_action(state, epsilon):
@@ -74,7 +91,10 @@ def draw_heatmap(theta):
     """
     pygame.draw.rect(screen, BG, (W_PEND, 0, W_HEAT, H))
 
-    q2d = Q  # (N_ANGLE, N_ACTS)
+    if USE_SPEED:
+        q2d = Q.max(axis=1)  # max over speed bins → (N_ANGLE, N_ACTS)
+    else:
+        q2d = Q  # (N_ANGLE, N_ACTS)
 
     # Normalise Q-values to [0, 1] for brightness
     q_min, q_max = q2d.min(), q2d.max()
@@ -246,9 +266,10 @@ def draw_pendulum(
         mode_surf, (W - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20)
     )
 
-    y0 = 390
+    y0 = 330
     txt("Episode:", f"{episode}")
     txt("Step:", f"{step} / {MAX_STEPS}")
+    txt("State:", "angle+speed" if USE_SPEED else "angle only", col=HINT_C)
     txt("Upright time:", f"{reward_total:.0f} steps")
     txt("Epsilon:", f"{epsilon:.3f}")
     txt("FPS:", f"{fps_actual:.0f}")
@@ -267,7 +288,7 @@ def main():
     training = True  # start in training mode
     fps_actual = 0.0
 
-    theta = env.reset(
+    theta, theta_dot = env.reset(
         theta=math.pi + np.random.uniform(-0.3, 0.3),
         theta_dot=np.random.uniform(-0.5, 0.5),
     )
@@ -288,7 +309,7 @@ def main():
                     pygame.quit()
                     sys.exit()
                 if event.key == pygame.K_r:
-                    theta = env.reset(
+                    theta, theta_dot = env.reset(
                         theta=math.pi + np.random.uniform(-0.3, 0.3),
                         theta_dot=np.random.uniform(-0.5, 0.5),
                     )
@@ -298,12 +319,12 @@ def main():
                     training = not training
 
         # ── Agent step ──
-        state = discretise(theta)
+        state = discretise(theta, theta_dot)
         act_idx = choose_action(state, epsilon if training else 0.0)
         torque = ACTIONS[act_idx]
         last_torque = torque
 
-        theta_new, terminated = env.step(torque)
+        theta_new, theta_dot_new, terminated = env.step(torque)
         if terminated:
             reward = -1.0
         else:
@@ -312,17 +333,17 @@ def main():
         step += 1
 
         if training:
-            next_state = discretise(theta_new)
+            next_state = discretise(theta_new, theta_dot_new)
             update_q(state, act_idx, reward, next_state)
 
-        theta = theta_new
+        theta, theta_dot = theta_new, theta_dot_new
 
         # ── Episode end ──
         if terminated or step >= MAX_STEPS:
             if training:
                 epsilon = max(EPSILON_END, epsilon * EPSILON_DECAY)
             episode += 1
-            theta = env.reset(
+            theta, theta_dot = env.reset(
                 theta=math.pi + np.random.uniform(-0.3, 0.3),
                 theta_dot=np.random.uniform(-0.5, 0.5),
             )
@@ -332,7 +353,7 @@ def main():
         # ── Render ──
         draw_pendulum(
             theta,
-            env.theta_dot,
+            theta_dot,
             last_torque,
             episode,
             step,
