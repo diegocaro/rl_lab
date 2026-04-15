@@ -16,7 +16,6 @@ Controls:
   Q      – quit
 """
 
-import argparse
 import math
 import sys
 import time
@@ -26,23 +25,8 @@ import pygame
 
 from pendulum import MAX_TORQUE, Pendulum, PendulumRenderer
 
-# ── CLI args ───────────────────────────────────────────────────────────────────
-_parser = argparse.ArgumentParser(description="Q-Learning Pendulum Balancer")
-_parser.add_argument(
-    "--no-speed",
-    action="store_true",
-    help="exclude angular velocity from the state space (angle only)",
-)
-_args = _parser.parse_args()
-
 # ── Q-learning hyper-parameters ────────────────────────────────────────────────
-USE_SPEED = not _args.no_speed  # include angular velocity in the state
-
-MAX_SPEED = (
-    16.0  # rad/s — discretization bound for the speed bins (only used if USE_SPEED)
-)
 N_ANGLE = 32  # angle bins   (–π … π)
-N_SPEED = 32  # speed bins   (–MAX_SPEED … MAX_SPEED)
 ACTIONS = np.linspace(-MAX_TORQUE, MAX_TORQUE, 9)  # 9 actions
 N_ACTS = len(ACTIONS)
 
@@ -56,24 +40,16 @@ MAX_STEPS = 500  # steps per episode
 
 # ── Discretisation helpers ─────────────────────────────────────────────────────
 angle_bins = np.linspace(-math.pi, math.pi, N_ANGLE + 1)
-speed_bins = np.linspace(-MAX_SPEED, MAX_SPEED, N_SPEED + 1)
 
 
-def discretise(theta, theta_dot):
-    """Return a state tuple used to index the Q-table.
-    With USE_SPEED=True:  (angle_bin, speed_bin)
-    With USE_SPEED=False: (angle_bin,)  — velocity is ignored
-    """
+def discretise(theta):
+    """Return a state tuple (angle_bin,) used to index the Q-table."""
     a = int(np.clip(np.digitize(theta, angle_bins) - 1, 0, N_ANGLE - 1))
-    if USE_SPEED:
-        s = int(np.clip(np.digitize(theta_dot, speed_bins) - 1, 0, N_SPEED - 1))
-        return (a, s)
     return (a,)
 
 
 # ── Q-table ────────────────────────────────────────────────────────────────────
-# Shape: (N_ANGLE, N_SPEED, N_ACTS) with speed, (N_ANGLE, N_ACTS) without
-Q = np.zeros((N_ANGLE, N_SPEED, N_ACTS) if USE_SPEED else (N_ANGLE, N_ACTS))
+Q = np.zeros((N_ANGLE, N_ACTS))
 
 
 def choose_action(state, epsilon):
@@ -87,9 +63,92 @@ def update_q(state, act, reward, next_state):
     Q[state + (act,)] += ALPHA * (reward + GAMMA * best_next - Q[state + (act,)])
 
 
+# ── Policy heatmap ────────────────────────────────────────────────────────────
+def draw_heatmap(theta):
+    """Render Q-values as action vs angle in the right panel.
+
+    X axis: angle bins  (–π … π, left to right)
+    Y axis: action/torque (max negative at bottom, max positive at top)
+    Colour: Q-value intensity — bright = high value, dark = low
+    Greedy action at each angle is highlighted in white.
+    """
+    pygame.draw.rect(screen, BG, (W_PEND, 0, W_HEAT, H))
+
+    q2d = Q  # (N_ANGLE, N_ACTS)
+
+    # Normalise Q-values to [0, 1] for brightness
+    q_min, q_max = q2d.min(), q2d.max()
+    if q_max > q_min:
+        q_norm = (q2d - q_min) / (q_max - q_min)
+    else:
+        q_norm = np.zeros_like(q2d)
+
+    # Transpose to (N_ACTS, N_ANGLE): X = actions, Y = angle
+    q2d_t = q2d.T
+
+    # Brightness = Q-value; greedy action is naturally the brightest cell
+    intensity = (q_norm.T * 255).astype(np.uint8)
+    r = intensity
+    g = intensity
+    b = intensity
+
+    # rgb shape (N_ACTS, N_ANGLE, 3); flip Y so +pi is at top
+    rgb = np.stack([r, g, b], axis=2)[:, ::-1, :]
+
+    # Scale up to fill the heatmap panel
+    pad = 40
+    cell = min((W_HEAT - 2 * pad) // N_ACTS, (H - 2 * pad) // N_ANGLE)
+    map_w, map_h = N_ACTS * cell, N_ANGLE * cell
+    ox = W_PEND + (W_HEAT - map_w) // 2
+    oy = (H - map_h) // 2
+
+    small = pygame.surfarray.make_surface(rgb)
+    scaled = pygame.transform.scale(small, (map_w, map_h))
+    screen.blit(scaled, (ox, oy))
+
+    # Divider line between panels
+    pygame.draw.line(screen, HINT_C, (W_PEND, 0), (W_PEND, H), 1)
+
+    # X axis labels (actions / torque)
+    lbl = font_sml.render(f"-{MAX_TORQUE:.0f}", True, HINT_C)
+    screen.blit(lbl, (ox, oy + map_h + 4))
+    lbl = font_sml.render(f"+{MAX_TORQUE:.0f}", True, HINT_C)
+    screen.blit(lbl, (ox + map_w - lbl.get_width(), oy + map_h + 4))
+    lbl = font_sml.render("torque", True, HINT_C)
+    screen.blit(lbl, (ox + map_w // 2 - lbl.get_width() // 2, oy + map_h + 4))
+
+    # Y axis labels (angle in radians): +pi at top, -pi at bottom
+    angle_ticks = [
+        (math.pi, "+pi  "),
+        (math.pi / 2, "+pi/2"),
+        (0.0, "  0  "),
+        (-math.pi / 2, "-pi/2"),
+        (-math.pi, "-pi  "),
+    ]
+    for angle_val, label in angle_ticks:
+        # Map angle to pixel y: top=+pi, bottom=-pi
+        frac = (math.pi - angle_val) / (2 * math.pi)
+        y_pos = oy + int(frac * map_h)
+        lbl = font_sml.render(label, True, HINT_C)
+        screen.blit(lbl, (ox - lbl.get_width() - 4, y_pos - lbl.get_height() // 2))
+        pygame.draw.line(screen, HINT_C, (ox - 3, y_pos), (ox, y_pos), 1)
+
+    # Current theta marker — horizontal line across the heatmap
+    frac = (math.pi - theta) / (2 * math.pi)
+    y_theta = oy + int(frac * map_h)
+    pygame.draw.line(screen, (255, 200, 0), (ox, y_theta), (ox + map_w, y_theta), 1)
+    lbl = font_sml.render(f"{theta:+.2f}", True, (255, 200, 0))
+    screen.blit(lbl, (ox + map_w + 4, y_theta - lbl.get_height() // 2))
+
+    # Title
+    title = font_sml.render("Q-value  (brighter = higher)", True, TEXT_C)
+    screen.blit(title, (ox + map_w // 2 - title.get_width() // 2, 8))
+
+
 # ── Pygame visualisation ───────────────────────────────────────────────────────
-W, H = 600, 550
-CX, CY = W // 2, 260  # pivot centre
+W_PEND, W_HEAT, H = 600, 400, 550
+W = W_PEND + W_HEAT  # total window width
+CX, CY = W_PEND // 2, 260  # pivot centre (within the pendulum panel)
 PX_LEN = 180  # pixels per metre
 PIVOT_R = 8
 BOB_R = 18
@@ -102,7 +161,9 @@ pygame.display.set_caption("Q-Learning Pendulum")
 clock = pygame.time.Clock()
 
 # Pivot is horizontally centred but raised to leave room for the HUD below
-renderer = PendulumRenderer(width=W, height=H, cx=CX, cy=CY, scale=PX_LEN, show_hud=True)
+renderer = PendulumRenderer(
+    width=W, height=H, cx=CX, cy=CY, scale=PX_LEN, show_hud=True
+)
 
 # Fonts
 font_big = pygame.font.SysFont("monospace", 22, bold=True)
@@ -185,20 +246,17 @@ def draw_pendulum(
         mode_surf, (W - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20)
     )
 
-    y0 = 330
+    y0 = 390
     txt("Episode:", f"{episode}")
     txt("Step:", f"{step} / {MAX_STEPS}")
-    txt("State:", "angle+speed" if USE_SPEED else "angle only", col=HINT_C)
     txt("Upright time:", f"{reward_total:.0f} steps")
     txt("Epsilon:", f"{epsilon:.3f}")
     txt("FPS:", f"{fps_actual:.0f}")
 
     hint1 = font_sml.render(
-        "SPACE: toggle train/watch   R: reset   Q: quit", True, (100, 110, 130)
+        "SPACE: train/watch   R: reset   Q: quit", True, (100, 110, 130)
     )
     screen.blit(hint1, (30, H - 30))
-
-    pygame.display.flip()
 
 
 # ── Main loop ──────────────────────────────────────────────────────────────────
@@ -209,7 +267,7 @@ def main():
     training = True  # start in training mode
     fps_actual = 0.0
 
-    theta, theta_dot = env.reset(
+    theta = env.reset(
         theta=math.pi + np.random.uniform(-0.3, 0.3),
         theta_dot=np.random.uniform(-0.5, 0.5),
     )
@@ -230,7 +288,7 @@ def main():
                     pygame.quit()
                     sys.exit()
                 if event.key == pygame.K_r:
-                    theta, theta_dot = env.reset(
+                    theta = env.reset(
                         theta=math.pi + np.random.uniform(-0.3, 0.3),
                         theta_dot=np.random.uniform(-0.5, 0.5),
                     )
@@ -240,12 +298,12 @@ def main():
                     training = not training
 
         # ── Agent step ──
-        state = discretise(theta, theta_dot)
+        state = discretise(theta)
         act_idx = choose_action(state, epsilon if training else 0.0)
         torque = ACTIONS[act_idx]
         last_torque = torque
 
-        theta_new, theta_dot_new, terminated = env.step(torque)
+        theta_new, terminated = env.step(torque)
         if terminated:
             reward = -1.0
         else:
@@ -254,17 +312,17 @@ def main():
         step += 1
 
         if training:
-            next_state = discretise(theta_new, theta_dot_new)
+            next_state = discretise(theta_new)
             update_q(state, act_idx, reward, next_state)
 
-        theta, theta_dot = theta_new, theta_dot_new
+        theta = theta_new
 
         # ── Episode end ──
         if terminated or step >= MAX_STEPS:
             if training:
                 epsilon = max(EPSILON_END, epsilon * EPSILON_DECAY)
             episode += 1
-            theta, theta_dot = env.reset(
+            theta = env.reset(
                 theta=math.pi + np.random.uniform(-0.3, 0.3),
                 theta_dot=np.random.uniform(-0.5, 0.5),
             )
@@ -274,7 +332,7 @@ def main():
         # ── Render ──
         draw_pendulum(
             theta,
-            theta_dot,
+            env.theta_dot,
             last_torque,
             episode,
             step,
@@ -283,6 +341,8 @@ def main():
             training,
             fps_actual,
         )
+        draw_heatmap(theta)
+        pygame.display.flip()
 
         # ── Timing ──
         if training:

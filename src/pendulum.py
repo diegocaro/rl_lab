@@ -223,7 +223,7 @@ def main():
                 torque = -MAX_TORQUE
             theta, terminated = pend.step(torque)
 
-        renderer.draw(theta, pend.speed, torque)
+        renderer.draw(theta, pend.theta_dot, torque)
         screen.blit(renderer.surface, (0, 0))
 
         if terminated:
