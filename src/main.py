@@ -16,6 +16,7 @@ Controls:
   Q      – quit
 """
 
+import argparse
 import math
 import sys
 import time
@@ -25,8 +26,21 @@ import pygame
 
 from pendulum import MAX_TORQUE, Pendulum, PendulumRenderer
 
+# ── CLI args ───────────────────────────────────────────────────────────────────
+_parser = argparse.ArgumentParser(description="Q-Learning Pendulum Balancer")
+_parser.add_argument(
+    "--no-speed",
+    action="store_true",
+    help="exclude angular velocity from the state space (angle only)",
+)
+_args = _parser.parse_args()
+
 # ── Q-learning hyper-parameters ────────────────────────────────────────────────
-MAX_SPEED = 16.0  # rad/s — discretization bound for the Q-table speed bins
+USE_SPEED = not _args.no_speed  # include angular velocity in the state
+
+MAX_SPEED = (
+    16.0  # rad/s — discretization bound for the speed bins (only used if USE_SPEED)
+)
 N_ANGLE = 32  # angle bins   (–π … π)
 N_SPEED = 32  # speed bins   (–MAX_SPEED … MAX_SPEED)
 ACTIONS = np.linspace(-MAX_TORQUE, MAX_TORQUE, 9)  # 9 actions
@@ -46,24 +60,31 @@ speed_bins = np.linspace(-MAX_SPEED, MAX_SPEED, N_SPEED + 1)
 
 
 def discretise(theta, theta_dot):
-    a = np.clip(np.digitize(theta, angle_bins) - 1, 0, N_ANGLE - 1)
-    s = np.clip(np.digitize(theta_dot, speed_bins) - 1, 0, N_SPEED - 1)
-    return a, s
+    """Return a state tuple used to index the Q-table.
+    With USE_SPEED=True:  (angle_bin, speed_bin)
+    With USE_SPEED=False: (angle_bin,)  — velocity is ignored
+    """
+    a = int(np.clip(np.digitize(theta, angle_bins) - 1, 0, N_ANGLE - 1))
+    if USE_SPEED:
+        s = int(np.clip(np.digitize(theta_dot, speed_bins) - 1, 0, N_SPEED - 1))
+        return (a, s)
+    return (a,)
 
 
 # ── Q-table ────────────────────────────────────────────────────────────────────
-Q = np.zeros((N_ANGLE, N_SPEED, N_ACTS))
+# Shape: (N_ANGLE, N_SPEED, N_ACTS) with speed, (N_ANGLE, N_ACTS) without
+Q = np.zeros((N_ANGLE, N_SPEED, N_ACTS) if USE_SPEED else (N_ANGLE, N_ACTS))
 
 
-def choose_action(a, s, epsilon):
+def choose_action(state, epsilon):
     if np.random.rand() < epsilon:
         return np.random.randint(N_ACTS)
-    return int(np.argmax(Q[a, s]))
+    return int(np.argmax(Q[state]))
 
 
-def update_q(a, s, act, reward, a2, s2):
-    best_next = np.max(Q[a2, s2])
-    Q[a, s, act] += ALPHA * (reward + GAMMA * best_next - Q[a, s, act])
+def update_q(state, act, reward, next_state):
+    best_next = np.max(Q[next_state])
+    Q[state + (act,)] += ALPHA * (reward + GAMMA * best_next - Q[state + (act,)])
 
 
 # ── Pygame visualisation ───────────────────────────────────────────────────────
@@ -81,7 +102,7 @@ pygame.display.set_caption("Q-Learning Pendulum")
 clock = pygame.time.Clock()
 
 # Pivot is horizontally centred but raised to leave room for the HUD below
-renderer = PendulumRenderer(width=W, height=H, cx=CX, cy=CY, scale=PX_LEN)
+renderer = PendulumRenderer(width=W, height=H, cx=CX, cy=CY, scale=PX_LEN, show_hud=True)
 
 # Fonts
 font_big = pygame.font.SysFont("monospace", 22, bold=True)
@@ -90,6 +111,7 @@ font_sml = pygame.font.SysFont("monospace", 13)
 
 # Colours
 BG = (15, 17, 26)
+HINT_C = (90, 100, 120)
 BOB_UP_C = (80, 255, 140)  # green — used for HUD text when upright
 TORQUE_C = (255, 180, 50)
 TEXT_C = (200, 210, 230)
@@ -163,15 +185,10 @@ def draw_pendulum(
         mode_surf, (W - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20)
     )
 
-    y0 = 360
+    y0 = 330
     txt("Episode:", f"{episode}")
     txt("Step:", f"{step} / {MAX_STEPS}")
-    txt(
-        "Angle (deg):",
-        f"{math.degrees(theta):+.1f}",
-        col=BOB_UP_C if upright else WARN_C,
-    )
-    txt("Speed (r/s):", f"{theta_dot:+.2f}")
+    txt("State:", "angle+speed" if USE_SPEED else "angle only", col=HINT_C)
     txt("Upright time:", f"{reward_total:.0f} steps")
     txt("Epsilon:", f"{epsilon:.3f}")
     txt("FPS:", f"{fps_actual:.0f}")
@@ -223,8 +240,8 @@ def main():
                     training = not training
 
         # ── Agent step ──
-        a_idx, s_idx = discretise(theta, theta_dot)
-        act_idx = choose_action(a_idx, s_idx, epsilon if training else 0.0)
+        state = discretise(theta, theta_dot)
+        act_idx = choose_action(state, epsilon if training else 0.0)
         torque = ACTIONS[act_idx]
         last_torque = torque
 
@@ -237,8 +254,8 @@ def main():
         step += 1
 
         if training:
-            a2, s2 = discretise(theta_new, theta_dot_new)
-            update_q(a_idx, s_idx, act_idx, reward, a2, s2)
+            next_state = discretise(theta_new, theta_dot_new)
+            update_q(state, act_idx, reward, next_state)
 
         theta, theta_dot = theta_new, theta_dot_new
 
