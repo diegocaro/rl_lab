@@ -23,18 +23,12 @@ import time
 import numpy as np
 import pygame
 
-# ── Physics constants ──────────────────────────────────────────────────────────
-G = 9.81  # gravity  (m/s²)
-L = 1.0  # length   (m)
-M = 1.0  # mass     (kg)
-B = 0.05  # damping
-DT = 0.02  # timestep (s)
-MAX_TORQUE = 20.0  # N·m
-MAX_SPEED = 16.0  # rad/s
+from pendulum import MAX_TORQUE, Pendulum, PendulumRenderer
 
 # ── Q-learning hyper-parameters ────────────────────────────────────────────────
-N_ANGLE = 32  # angle bins   (–π … π)
-N_SPEED = 32  # speed bins   (–MAX_SPEED … MAX_SPEED)
+MAX_SPEED = 16.0  # rad/s — discretization bound for the Q-table speed bins
+N_ANGLE = 32      # angle bins   (–π … π)
+N_SPEED = 32      # speed bins   (–MAX_SPEED … MAX_SPEED)
 ACTIONS = np.linspace(-MAX_TORQUE, MAX_TORQUE, 9)  # 9 actions
 N_ACTS = len(ACTIONS)
 
@@ -55,27 +49,6 @@ def discretise(theta, theta_dot):
     a = np.clip(np.digitize(theta, angle_bins) - 1, 0, N_ANGLE - 1)
     s = np.clip(np.digitize(theta_dot, speed_bins) - 1, 0, N_SPEED - 1)
     return a, s
-
-
-# ── Environment ────────────────────────────────────────────────────────────────
-class PendulumEnv:
-    def reset(self):
-        # Start near the bottom with a small random nudge
-        self.theta = math.pi + np.random.uniform(-0.3, 0.3)
-        self.theta_dot = np.random.uniform(-0.5, 0.5)
-        return self.theta, self.theta_dot
-
-    def step(self, torque):
-        th, td = self.theta, self.theta_dot
-        # Euler integration
-        th_ddot = (G / L) * math.sin(th) - (B / (M * L**2)) * td + torque / (M * L**2)
-        self.theta_dot = np.clip(td + th_ddot * DT, -MAX_SPEED, MAX_SPEED)
-        self.theta = (th + self.theta_dot * DT + math.pi) % (2 * math.pi) - math.pi
-        # Reward: +1 if upright (|θ| < 0.2 rad) AND low velocity (|θ̇| < 0.5 rad/s)
-        upright = abs(self.theta) < 0.2
-        low_velocity = abs(self.theta_dot) < 0.5
-        reward = 1.0 if (upright and low_velocity) else 0.0
-        return self.theta, self.theta_dot, reward
 
 
 # ── Q-table ────────────────────────────────────────────────────────────────────
@@ -107,6 +80,9 @@ screen = pygame.display.set_mode((W, H))
 pygame.display.set_caption("Q-Learning Pendulum")
 clock = pygame.time.Clock()
 
+# Pivot is horizontally centred but raised to leave room for the HUD below
+renderer = PendulumRenderer(width=W, height=H, cx=CX, cy=CY, scale=PX_LEN)
+
 # Fonts
 font_big = pygame.font.SysFont("monospace", 22, bold=True)
 font_med = pygame.font.SysFont("monospace", 16)
@@ -114,13 +90,9 @@ font_sml = pygame.font.SysFont("monospace", 13)
 
 # Colours
 BG = (15, 17, 26)
-PIVOT_C = (200, 200, 220)
-ROD_C = (160, 180, 220)
-BOB_C = (80, 180, 255)
-BOB_UP_C = (80, 255, 140)  # green when upright
+BOB_UP_C = (80, 255, 140)  # green — used for HUD text when upright
 TORQUE_C = (255, 180, 50)
 TEXT_C = (200, 210, 230)
-ACCENT_C = (80, 180, 255)
 WARN_C = (255, 80, 80)
 GRID_C = (30, 35, 50)
 
@@ -128,9 +100,14 @@ GRID_C = (30, 35, 50)
 def draw_pendulum(
     theta, theta_dot, torque, episode, step, reward_total, epsilon, training, fps_actual
 ):
-    screen.fill(BG)
+    # Draw the pendulum into the off-screen surface, then blit to screen
+    renderer.draw(theta, theta_dot, torque)
+    screen.blit(renderer.surface, (0, 0))
 
-    # --- grid lines ---
+    upright = abs(theta) < 0.2
+
+    # --- grid lines (drawn on screen after blit so they appear on top,
+    #     colour is dark enough that it doesn't obscure the pendulum) ---
     for r in range(50, 300, 50):
         pygame.draw.circle(screen, GRID_C, (CX, CY), r, 1)
     for angle_deg in range(0, 360, 30):
@@ -153,18 +130,7 @@ def draw_pendulum(
         4,
     )
 
-    # Bob position  (θ=0 → straight up, pygame y-axis flipped)
-    bx = CX + int(PX_LEN * math.sin(theta))
-    by = CY - int(PX_LEN * math.cos(theta))
-
-    upright = abs(theta) < 0.2  # and abs(theta_dot) < 0.5
-    bob_col = BOB_UP_C if upright else BOB_C
-
-    # Rod
-    pygame.draw.line(screen, ROD_C, (CX, CY), (bx, by), 5)
-    # Pivot
-    pygame.draw.circle(screen, PIVOT_C, (CX, CY), PIVOT_R)
-    # Torque indicator (arc above pivot)
+    # --- torque indicator arc ---
     if torque != 0:
         arc_r = 30
         start = -math.pi / 2 + (0 if torque < 0 else math.pi)
@@ -179,9 +145,6 @@ def draw_pendulum(
             end,
             3,
         )
-    # Bob
-    pygame.draw.circle(screen, bob_col, (bx, by), BOB_R)
-    pygame.draw.circle(screen, (255, 255, 255), (bx, by), BOB_R, 2)
 
     # --- HUD ---------------------------------------------------------------
     y0 = 360
@@ -195,17 +158,12 @@ def draw_pendulum(
 
     mode_str = "TRAINING" if training else "WATCHING"
     mode_col = WARN_C if training else BOB_UP_C
-    hdr = font_big.render(f"Pendulum Q-Learning  [{mode_str}]", True, mode_col)
-    screen.blit(hdr, (30, 20))
+    mode_surf = font_big.render(mode_str, True, mode_col)
+    screen.blit(mode_surf, (W - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20))
 
     y0 = 360
     txt("Episode:", f"{episode}")
     txt("Step:", f"{step} / {MAX_STEPS}")
-    txt(
-        "Angle (°):", f"{math.degrees(theta):+.1f}", col=BOB_UP_C if upright else WARN_C
-    )
-    txt("Speed (r/s):", f"{theta_dot:+.2f}")
-    txt("Torque (Nm):", f"{torque:+.1f}", col=TORQUE_C)
     txt("Upright time:", f"{reward_total:.0f} steps")
     txt("Epsilon:", f"{epsilon:.3f}")
     txt("FPS:", f"{fps_actual:.0f}")
@@ -220,13 +178,16 @@ def draw_pendulum(
 
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
-    env = PendulumEnv()
+    env = Pendulum()
     epsilon = EPSILON_START
     episode = 0
     training = True  # start in training mode
     fps_actual = 0.0
 
-    theta, theta_dot = env.reset()
+    theta, theta_dot = env.reset(
+        theta=math.pi + np.random.uniform(-0.3, 0.3),
+        theta_dot=np.random.uniform(-0.5, 0.5),
+    )
     step = 0
     reward_total = 0.0
     last_torque = 0.0
@@ -244,7 +205,10 @@ def main():
                     pygame.quit()
                     sys.exit()
                 if event.key == pygame.K_r:
-                    theta, theta_dot = env.reset()
+                    theta, theta_dot = env.reset(
+                        theta=math.pi + np.random.uniform(-0.3, 0.3),
+                        theta_dot=np.random.uniform(-0.5, 0.5),
+                    )
                     step = 0
                     reward_total = 0.0
                 if event.key == pygame.K_SPACE:
@@ -256,7 +220,8 @@ def main():
         torque = ACTIONS[act_idx]
         last_torque = torque
 
-        theta_new, theta_dot_new, reward = env.step(torque)
+        theta_new, theta_dot_new = env.step(torque)
+        reward = 1.0 if abs(theta_new) < 0.2 else 0.0
         reward_total += reward
         step += 1
 
@@ -271,7 +236,10 @@ def main():
             if training:
                 epsilon = max(EPSILON_END, epsilon * EPSILON_DECAY)
             episode += 1
-            theta, theta_dot = env.reset()
+            theta, theta_dot = env.reset(
+                theta=math.pi + np.random.uniform(-0.3, 0.3),
+                theta_dot=np.random.uniform(-0.5, 0.5),
+            )
             step = 0
             reward_total = 0.0
 
