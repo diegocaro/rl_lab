@@ -228,8 +228,11 @@ def main():
         torque = ACTIONS[act_idx]
         last_torque = torque
 
-        theta_new, theta_dot_new = env.step(torque)
-        reward = 1.0 if abs(theta_new) < 0.2 else 0.0
+        theta_new, theta_dot_new, terminated = env.step(torque)
+        if terminated:
+            reward = -1.0
+        else:
+            reward = 1.0 if abs(theta_new) < 0.2 else 0.0
         reward_total += reward
         step += 1
 
@@ -240,7 +243,7 @@ def main():
         theta, theta_dot = theta_new, theta_dot_new
 
         # ── Episode end ──
-        if step >= MAX_STEPS:
+        if terminated or step >= MAX_STEPS:
             if training:
                 epsilon = max(EPSILON_END, epsilon * EPSILON_DECAY)
             episode += 1
