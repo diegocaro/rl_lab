@@ -171,6 +171,7 @@ def draw_pendulum(
         f"{math.degrees(theta):+.1f}",
         col=BOB_UP_C if upright else WARN_C,
     )
+    txt("Speed (r/s):", f"{theta_dot:+.2f}")
     txt("Upright time:", f"{reward_total:.0f} steps")
     txt("Epsilon:", f"{epsilon:.3f}")
     txt("FPS:", f"{fps_actual:.0f}")

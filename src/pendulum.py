@@ -28,7 +28,7 @@ L = 1.0   # length    (m)
 M = 1.0   # mass      (kg)
 B = 0.05  # damping   (N·m·s)
 DT = 0.02  # timestep  (s)
-MAX_TORQUE = 5.0  # N·m
+MAX_TORQUE = 20.0  # N·m
 
 
 class Pendulum:
@@ -45,7 +45,8 @@ class Pendulum:
 
     def reset(self, theta=math.pi, theta_dot=0.0):
         """Set state directly; defaults to hanging at rest."""
-        self.theta = float(theta)
+        # Wrap theta to (-π, π] so the state is consistent with what step() returns
+        self.theta = (float(theta) + math.pi) % (2 * math.pi) - math.pi
         self.theta_dot = float(theta_dot)
         return self.theta, self.theta_dot
 
