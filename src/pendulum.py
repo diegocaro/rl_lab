@@ -29,6 +29,7 @@ M = 1.0  # mass      (kg)
 B = 0.05  # damping   (N·m·s)
 DT = 0.02  # timestep  (s)
 MAX_TORQUE = 40.0  # N·m
+MAX_SPEED = 12.0  # rad/s
 
 
 class Pendulum:
@@ -39,7 +40,7 @@ class Pendulum:
         theta_dot – angular velocity (rad/s)
     """
 
-    def __init__(self, max_speed=20.0):
+    def __init__(self, max_speed: float = MAX_SPEED):
         """
         max_speed – angular velocity limit (rad/s). If exceeded, the pendulum
                     is considered broken and step() sets terminated=True.
