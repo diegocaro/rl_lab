@@ -263,7 +263,7 @@ def draw_pendulum(
     mode_col = WARN_C if training else BOB_UP_C
     mode_surf = font_big.render(mode_str, True, mode_col)
     screen.blit(
-        mode_surf, (W - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20)
+        mode_surf, (W_PEND - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20)
     )
 
     y0 = 330
