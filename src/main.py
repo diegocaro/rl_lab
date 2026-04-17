@@ -289,6 +289,7 @@ def draw_pendulum(
 
     txt("Episode:", f"{episode}")
     txt("Step:", f"{step}/{MAX_STEPS}")
+    txt("State:", "angle+speed" if USE_SPEED else "angle only", col=HINT_C)
     txt("Upright:", f"{reward_total:.0f} steps")
     txt("Epsilon:", f"{epsilon:.3f}")
     txt("FPS:", f"{fps_actual:.0f}")
