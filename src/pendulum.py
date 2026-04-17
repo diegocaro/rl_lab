@@ -28,8 +28,8 @@ L = 1.0  # length    (m)
 M = 1.0  # mass      (kg)
 B = 0.05  # damping   (N·m·s)
 DT = 0.02  # timestep  (s)
-MAX_TORQUE = 40.0  # N·m
-MAX_SPEED = 12.0  # rad/s
+MAX_TORQUE = 20.0  # N·m
+MAX_ROD_FORCE = 100.0  # N (rod breaking point)
 
 
 class Pendulum:
@@ -40,17 +40,15 @@ class Pendulum:
         theta_dot – angular velocity (rad/s)
     """
 
-    def __init__(self, max_speed: float = MAX_SPEED):
-        """
-        max_speed – angular velocity limit (rad/s). If exceeded, the pendulum
-                    is considered broken and step() sets terminated=True.
-                    Prevents the agent from exploiting fast spinning through
-                    the upright zone.
-        """
-        self.max_speed = max_speed
+    def __init__(self, max_rod_force: float = MAX_ROD_FORCE):
+        """Initialize pendulum at rest hanging position."""
         self.theta = math.pi  # start hanging
         self.theta_dot = 0.0
+        self.theta_ddot = 0.0
+        self.ax = 0.0
+        self.ay = 0.0
         self.terminated = False
+        self.max_rod_force = max_rod_force
 
     def reset(self, theta=math.pi, theta_dot=0.0):
         """Set state directly; defaults to hanging at rest.
@@ -67,21 +65,41 @@ class Pendulum:
         """Apply torque (N·m) for one timestep DT.
 
         Returns:
-            (theta, theta_dot, terminated)
-            theta      – new angle (rad), wrapped to (−π, π]
-            theta_dot  – new angular velocity (rad/s)
-            terminated – True if the pendulum broke (|θ̇| > max_speed)
+            (ax, ay, terminated)
+            ax         – bob acceleration in x (m/s²) — what an accelerometer reads
+            ay         – bob acceleration in y (m/s²) — what an accelerometer reads
+            terminated – True if rod force exceeds MAX_ROD_FORCE (rod breaks)
+
+        Note: theta, theta_dot, theta_ddot are internal state; access via
+        self.theta / self.theta_dot if needed for state discretization.
         """
         th, td = self.theta, self.theta_dot
-        th_ddot = (
+        self.theta_ddot = (
             (G / L) * math.sin(th)  # gravity: pulls toward bottom
             - (B / (M * L**2)) * td  # damping: opposes motion (friction at pivot)
             + torque / (M * L**2)  # applied torque
         )
-        self.theta_dot = td + th_ddot * DT
+        self.theta_dot = td + self.theta_ddot * DT
         self.theta = (th + self.theta_dot * DT + math.pi) % (2 * math.pi) - math.pi
-        self.terminated = abs(self.theta_dot) > self.max_speed
-        return self.theta, self.theta_dot, self.terminated
+
+        # Rod tension: gravity component + centripetal force
+        rod_force = M * (G * math.cos(self.theta) + L * self.theta_dot**2)
+        self.terminated = rod_force > self.max_rod_force
+
+        # Proper acceleration (internal, available for future sensor simulation)
+        self.ax = L * (
+            -math.sin(self.theta) * self.theta_dot**2
+            + math.cos(self.theta) * self.theta_ddot
+        )
+        self.ay = (
+            L
+            * (
+                math.cos(self.theta) * self.theta_dot**2
+                + math.sin(self.theta) * self.theta_ddot
+            )
+            - G
+        )
+        return self.theta, self.theta_dot, self.theta_ddot, self.terminated
 
 
 class PendulumRenderer:
@@ -140,7 +158,7 @@ class PendulumRenderer:
         self.surface = pygame.Surface((width, height))
         self.font = pygame.font.SysFont("monospace", 15)
 
-    def draw(self, theta, theta_dot, torque):
+    def draw(self, theta, theta_dot, torque, theta_ddot=0.0):
         import pygame
 
         surf = self.surface
@@ -158,15 +176,22 @@ class PendulumRenderer:
         pygame.draw.circle(surf, (255, 255, 255), (bx, by), self.BOB_R, 2)
 
         if self.show_hud:
-            # ── HUD top-left: dynamic state ──
+            lh = 20
+            x, y = 12, 12
+
+            def row(label, value, col):
+                nonlocal y
+                surf.blit(self.font.render(f"{label:<12}{value}", True, col), (x, y))
+                y += lh
+
+            rod_force = M * (G * math.cos(theta) + L * theta_dot**2)
+            rod_col = self.BOB_UP_C if rod_force < MAX_ROD_FORCE else self.THETA_C
             angle_col = self.BOB_UP_C if upright else self.THETA_C
-            hud = [
-                (f"theta:     {theta:+.4f} rad", angle_col),
-                (f"theta_dot: {theta_dot:+7.2f} rad/s", self.TEXT_C),
-                (f"torque:    {torque:+7.1f} N·m", self.TORQUE_C),
-            ]
-            for i, (line, col) in enumerate(hud):
-                surf.blit(self.font.render(line, True, col), (12, 12 + i * 20))
+            row("theta:", f"{theta:+.4f} rad", angle_col)
+            row("theta_dot:", f"{theta_dot:+.2f} rad/s", self.TEXT_C)
+            row("theta_ddot:", f"{theta_ddot:+.2f} rad/s²", self.TEXT_C)
+            row("rod_force:", f"{rod_force:+.1f} N", rod_col)
+            row("torque:", f"{torque:+.1f} N·m", self.TORQUE_C)
 
             # ── HUD top-right: fixed physics constants ──
             consts = [
@@ -200,7 +225,7 @@ def main():
 
     renderer = PendulumRenderer(width=W, height=H, show_hud=True)
     pend = Pendulum()
-    theta, theta_dot = pend.reset(theta=math.pi, theta_dot=0.0)
+    pend.reset(theta=math.pi, theta_dot=0.0)
     terminated = False
     torque = 0.0
 
@@ -214,7 +239,7 @@ def main():
                     pygame.quit()
                     sys.exit()
                 if event.key == pygame.K_r:
-                    theta, theta_dot = pend.reset(theta=math.pi, theta_dot=0.0)
+                    pend.reset(theta=math.pi, theta_dot=0.0)
                     terminated = False
 
         if not terminated:
@@ -224,14 +249,14 @@ def main():
                 torque = +MAX_TORQUE
             if keys[pygame.K_LEFT]:
                 torque = -MAX_TORQUE
-            theta, theta_dot, terminated = pend.step(torque)
+            _theta, _theta_dot, _theta_ddot, terminated = pend.step(torque)
 
-        renderer.draw(theta, theta_dot, torque)
+        renderer.draw(pend.theta, pend.theta_dot, torque, pend.theta_ddot)
         screen.blit(renderer.surface, (0, 0))
 
         if terminated:
             msg = font.render(
-                f"BROKEN: speed exceeded {pend.max_speed:.0f} rad/s — press R",
+                f"BROKEN: rod force exceeded {MAX_ROD_FORCE:.0f} N — press R",
                 True,
                 (255, 80, 80),
             )

@@ -38,8 +38,8 @@ USE_SPEED = not _args.no_speed
 
 # ── Q-learning hyper-parameters ────────────────────────────────────────────────
 N_ANGLE = 32  # angle bins   (–π … π)
-N_SPEED = 16  # angular velocity bins  (–MAX_SPEED … +MAX_SPEED)
-MAX_SPEED = 20.0  # must match Pendulum.max_speed default
+N_SPEED = 16  # angular velocity bins for discretization
+MAX_SPEED = 20.0  # upper bound for speed discretization (rad/s)
 ACTIONS = np.linspace(-MAX_TORQUE, MAX_TORQUE, 9)  # 9 actions
 N_ACTS = len(ACTIONS)
 
@@ -201,10 +201,10 @@ GRID_C = (30, 35, 50)
 
 
 def draw_pendulum(
-    theta, theta_dot, torque, episode, step, reward_total, epsilon, training, fps_actual
+    theta, theta_dot, torque, theta_ddot, episode, step, reward_total, epsilon, training, fps_actual
 ):
     # Draw the pendulum into the off-screen surface, then blit to screen
-    renderer.draw(theta, theta_dot, torque)
+    renderer.draw(theta, theta_dot, torque, theta_ddot)
     screen.blit(renderer.surface, (0, 0))
 
     upright = abs(theta) < 0.2
@@ -250,40 +250,31 @@ def draw_pendulum(
         )
 
     # --- HUD ---------------------------------------------------------------
-    y0 = 360
-    lh = 22
-
-    def txt(label, value, col=TEXT_C, y_offset=0):
-        nonlocal y0
-        surf = font_med.render(f"{label:<18}{value}", True, col)
-        screen.blit(surf, (30, y0 + y_offset))
-        y0 += lh
-
     mode_str = "TRAINING" if training else "WATCHING"
     mode_col = WARN_C if training else BOB_UP_C
     mode_surf = font_big.render(mode_str, True, mode_col)
-    screen.blit(
-        mode_surf,
-        (W_PEND - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20),
-    )
+    screen.blit(mode_surf, (W_PEND - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20))
 
+    lh = 22
     y0 = 330
+
+    def txt(label, value, col=TEXT_C):
+        nonlocal y0
+        screen.blit(font_med.render(f"{label:<14}{value}", True, col), (30, y0))
+        y0 += lh
+
     txt("Episode:", f"{episode}")
-    txt("Step:", f"{step} / {MAX_STEPS}")
-    txt("State:", "angle+speed" if USE_SPEED else "angle only", col=HINT_C)
-    txt("Upright time:", f"{reward_total:.0f} steps")
+    txt("Step:", f"{step}/{MAX_STEPS}")
+    txt("Upright:", f"{reward_total:.0f} steps")
     txt("Epsilon:", f"{epsilon:.3f}")
     txt("FPS:", f"{fps_actual:.0f}")
 
-    hint1 = font_sml.render(
-        "SPACE: train/watch   R: reset   Q: quit", True, (100, 110, 130)
-    )
-    screen.blit(hint1, (30, H - 30))
+    screen.blit(font_sml.render("SPACE: train/watch   R: reset   Q: quit", True, HINT_C), (30, H - 30))
 
 
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
-    env = Pendulum(max_speed=MAX_SPEED)
+    env = Pendulum()
     epsilon = EPSILON_START
     episode = 0
     training = True  # start in training mode
@@ -325,29 +316,28 @@ def main():
         torque = ACTIONS[act_idx]
         last_torque = torque
 
-        theta_new, theta_dot_new, terminated = env.step(torque)
+        theta, theta_dot, theta_ddot, terminated = env.step(torque)
         if terminated:
             reward = -1.0
         else:
-            reward = 1.0 if abs(theta_new) < 0.2 else 0.0
+            reward = 1.0 if abs(env.theta) < 0.2 else 0.0
         reward_total += reward
         step += 1
 
         if training:
-            next_state = discretise(theta_new, theta_dot_new)
+            next_state = discretise(env.theta, env.theta_dot)
             update_q(state, act_idx, reward, next_state)
-
-        theta, theta_dot = theta_new, theta_dot_new
 
         # ── Episode end ──
         if terminated or step >= MAX_STEPS:
             if training:
                 epsilon = max(EPSILON_END, epsilon * EPSILON_DECAY)
             episode += 1
-            theta, theta_dot = env.reset(
+            env.reset(
                 theta=math.pi + np.random.uniform(-0.3, 0.3),
                 theta_dot=np.random.uniform(-0.5, 0.5),
             )
+            theta, theta_dot = env.theta, env.theta_dot
             step = 0
             reward_total = 0.0
 
@@ -356,6 +346,7 @@ def main():
             theta,
             theta_dot,
             last_torque,
+            theta_ddot,
             episode,
             step,
             reward_total,
