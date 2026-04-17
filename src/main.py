@@ -33,8 +33,20 @@ _parser.add_argument(
     action="store_true",
     help="Ignore angular velocity in the state (angle-only Q-table).",
 )
+_reward_group = _parser.add_mutually_exclusive_group()
+_reward_group.add_argument(
+    "--simple-reward",
+    action="store_true",
+    help="Reward: +1 when upright, -1 on termination (default).",
+)
+_reward_group.add_argument(
+    "--better-reward",
+    action="store_true",
+    help="Reward: upright bonus minus velocity and torque penalties to reduce jitter.",
+)
 _args = _parser.parse_args()
 USE_SPEED = not _args.no_speed
+USE_BETTER_REWARD = _args.better_reward
 
 # ── Q-learning hyper-parameters ────────────────────────────────────────────────
 N_ANGLE = 32  # angle bins   (–π … π)
@@ -201,7 +213,16 @@ GRID_C = (30, 35, 50)
 
 
 def draw_pendulum(
-    theta, theta_dot, torque, theta_ddot, episode, step, reward_total, epsilon, training, fps_actual
+    theta,
+    theta_dot,
+    torque,
+    theta_ddot,
+    episode,
+    step,
+    reward_total,
+    epsilon,
+    training,
+    fps_actual,
 ):
     # Draw the pendulum into the off-screen surface, then blit to screen
     renderer.draw(theta, theta_dot, torque, theta_ddot)
@@ -253,7 +274,10 @@ def draw_pendulum(
     mode_str = "TRAINING" if training else "WATCHING"
     mode_col = WARN_C if training else BOB_UP_C
     mode_surf = font_big.render(mode_str, True, mode_col)
-    screen.blit(mode_surf, (W_PEND - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20))
+    screen.blit(
+        mode_surf,
+        (W_PEND - mode_surf.get_width() - 20, H - mode_surf.get_height() - 20),
+    )
 
     lh = 22
     y0 = 330
@@ -269,7 +293,10 @@ def draw_pendulum(
     txt("Epsilon:", f"{epsilon:.3f}")
     txt("FPS:", f"{fps_actual:.0f}")
 
-    screen.blit(font_sml.render("SPACE: train/watch   R: reset   Q: quit", True, HINT_C), (30, H - 30))
+    screen.blit(
+        font_sml.render("SPACE: train/watch   R: reset   Q: quit", True, HINT_C),
+        (30, H - 30),
+    )
 
 
 # ── Main loop ──────────────────────────────────────────────────────────────────
@@ -319,6 +346,17 @@ def main():
         theta, theta_dot, theta_ddot, terminated = env.step(torque)
         if terminated:
             reward = -1.0
+        elif USE_BETTER_REWARD:
+            # if upwright, give bonus reward if less gittering (lower velocity and torque)
+            # to encourage smoother balancing
+            upright = abs(env.theta) < 0.2
+            if upright:
+                gentleness = max(
+                    0.0, 1.0 - env.theta_dot**2 - (torque / MAX_TORQUE) ** 2
+                )
+                reward = 1.0 + gentleness
+            else:
+                reward = 0.0
         else:
             reward = 1.0 if abs(env.theta) < 0.2 else 0.0
         reward_total += reward
