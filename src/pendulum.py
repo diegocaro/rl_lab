@@ -29,7 +29,7 @@ M = 1.0  # mass      (kg)
 B = 0.05  # damping   (N·m·s)
 DT = 0.02  # timestep  (s)
 MAX_TORQUE = 40.0  # N·m
-MAX_ROD_FORCE = 300.0  # N (rod breaking point)
+MAX_ROD_FORCE = 200.0  # N (rod breaking point)
 
 
 class Pendulum:
