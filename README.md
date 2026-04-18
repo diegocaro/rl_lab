@@ -2,7 +2,7 @@
 
 Un laboratorio interactivo para experimentar con algoritmos de aprendizaje por refuerzo. Actualmente incluye un agente Q-learning que aprende a equilibrar un péndulo invertido con visualización en tiempo real.
 
-![Modo entrenamiento mostrando el péndulo y el mapa de calor de la tabla Q]
+![Modo entrenamiento mostrando el péndulo y el mapa de calor de la tabla Q](assets/q-learning-pendulum.mov)
 
 ## ¿De qué se trata?
 
