@@ -126,3 +126,7 @@ pre-commit install
 ```
 
 La calidad del código se mantiene con Ruff (linting y formato) y Pyright (tipado estático).
+
+## Créditos
+
+Desarrollado por Diego Caro con asistencia de [Claude Sonnet 4.6](https://www.anthropic.com/claude) a través de [Claude Code](https://claude.ai/code).

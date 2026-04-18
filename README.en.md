@@ -126,3 +126,7 @@ pre-commit install
 ```
 
 Code quality is enforced with Ruff (linting + formatting) and Pyright (type checking).
+
+## Credits
+
+Developed by Diego Caro with assistance from [Claude Sonnet 4.6](https://www.anthropic.com/claude) via [Claude Code](https://claude.ai/code).
