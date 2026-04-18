@@ -18,12 +18,12 @@ import pygame
 from rl_lab.engine.simulation import Simulation
 
 
-def run(sim: Simulation) -> None:
+def run(sim: Simulation, train_fps: int = 0) -> None:
     screen = pygame.display.set_mode(sim.window_size)
     pygame.display.set_caption("Q-Learning")
     clock = pygame.time.Clock()
 
-    _TRAIN_RENDER_INTERVAL = 1.0 / 30  # cap render at 30 fps during training
+    _TRAIN_RENDER_INTERVAL = 1.0 / train_fps if train_fps > 0 else 1.0 / 30
 
     training = True
     episode = 0
@@ -107,6 +107,8 @@ def run(sim: Simulation) -> None:
         # ── Timing ────────────────────────────────────────────────────────────
         if not training:
             clock.tick(sim.fps)
+        elif train_fps > 0:
+            clock.tick(train_fps)
         t_last = now
 
 
@@ -114,4 +116,5 @@ if __name__ == "__main__":
     pygame.init()
     from rl_lab.pendulum.sim import make_pendulum_sim
 
-    run(make_pendulum_sim())
+    sim, train_fps = make_pendulum_sim()
+    run(sim, train_fps=train_fps)

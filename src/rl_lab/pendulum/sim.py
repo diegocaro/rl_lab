@@ -190,7 +190,7 @@ class PendulumSim(Simulation):
 # ── Factory ───────────────────────────────────────────────────────────────────
 
 
-def make_pendulum_sim() -> PendulumSim:
+def make_pendulum_sim() -> tuple[PendulumSim, int]:
     """Parse pendulum-specific CLI args and return a ready-to-run PendulumSim."""
     parser = argparse.ArgumentParser(description="Q-Learning Pendulum Balancer")
     parser.add_argument(
@@ -205,5 +205,11 @@ def make_pendulum_sim() -> PendulumSim:
         action="store_true",
         help="Gentleness bonus to reduce jitter.",
     )
+    parser.add_argument(
+        "--train-fps",
+        type=int,
+        default=0,
+        help="Cap simulation rate during training (default: 0 = uncapped). Use 60 for smoother recordings.",
+    )
     args = parser.parse_args()
-    return PendulumSim(use_speed=not args.no_speed, better_reward=args.better_reward)
+    return PendulumSim(use_speed=not args.no_speed, better_reward=args.better_reward), args.train_fps
