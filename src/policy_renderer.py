@@ -24,6 +24,7 @@ class PolicyRenderer:
         action_range: tuple,  # (min_value, max_value) shown on X-axis
         action_name: str,  # X-axis label, e.g. "torque"
         state_ticks: list,  # [(frac_0_to_1, label_str), ...] for Y-axis
+        action_ticks: list | None = None,  # [(frac, label), ...] for X-axis; auto if None
         q_title: str = "Q-value  (brighter = higher)",
         freq_title: str = "applied torque  (brighter=most frequent)",
         bg: tuple = (15, 17, 26),
@@ -36,6 +37,14 @@ class PolicyRenderer:
         self.action_range = action_range
         self.action_name = action_name
         self.state_ticks = state_ticks
+        if action_ticks is None:
+            a_min, a_max = action_range
+            span = a_max - a_min
+            action_ticks = [
+                (i / 4, "0" if (a_min + i * span / 4) == 0 else f"{a_min + i * span / 4:+.0f}")
+                for i in range(5)
+            ]
+        self.action_ticks = action_ticks
         self.q_title = q_title
         self.freq_title = freq_title
         self.bg = bg
@@ -95,31 +104,35 @@ class PolicyRenderer:
             lbl = self._font.render(state_label, True, (255, 200, 0))
             surface.blit(lbl, (ox + map_w + 4, ym - lbl.get_height() // 2))
 
-        # Q heatmap X-axis label
-        lbl = self._font.render(self.action_name, True, self.hint_c)
-        q_label_y = oy + map_h + 4
-        surface.blit(lbl, (ox + map_w // 2 - lbl.get_width() // 2, q_label_y))
+        # Q heatmap X-axis ticks
+        q_label_y = oy + map_h + 6
+        for frac, label in self.action_ticks:
+            xp = ox + int(frac * map_w)
+            pygame.draw.line(surface, self.hint_c, (xp, oy + map_h), (xp, oy + map_h + 4), 1)
+            lbl = self._font.render(label, True, self.hint_c)
+            surface.blit(lbl, (xp - lbl.get_width() // 2, q_label_y))
 
         # ── Frequency row ─────────────────────────────────────────────────────
         freq_title_lbl = self._font.render(self.freq_title, True, self.text_c)
-        title_y = q_label_y + lbl.get_height() + 4
+        title_y = q_label_y + self._font.get_height() + 4
         surface.blit(
             freq_title_lbl, (ox + map_w // 2 - freq_title_lbl.get_width() // 2, title_y)
         )
 
         freq_y = title_y + freq_title_lbl.get_height() + 2
+        pygame.draw.rect(surface, (40, 42, 54), (ox, freq_y, map_w, freq_h))
         max_count = max(action_counts.max(), 1)
         for i, count in enumerate(action_counts):
             iv = int(255 * count / max_count)
             color = self.current_c if i == current_act else (iv, iv, iv)
             pygame.draw.rect(surface, color, (ox + i * cell, freq_y, cell, freq_h))
 
-        # Freq row X-axis labels
+        # Freq row X-axis labels — centered on the same x positions as the Q-heatmap ticks
         label_y = freq_y + freq_h + 4
         a_min, a_max = self.action_range
         lbl = self._font.render(f"{a_min:.0f}", True, self.hint_c)
-        surface.blit(lbl, (ox, label_y))
+        surface.blit(lbl, (ox - lbl.get_width() // 2, label_y))
         lbl = self._font.render(f"+{a_max:.0f}", True, self.hint_c)
-        surface.blit(lbl, (ox + map_w - lbl.get_width(), label_y))
+        surface.blit(lbl, (ox + map_w - lbl.get_width() // 2, label_y))
         lbl = self._font.render(self.action_name, True, self.hint_c)
         surface.blit(lbl, (ox + map_w // 2 - lbl.get_width() // 2, label_y))
