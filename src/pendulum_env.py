@@ -41,9 +41,11 @@ class PendulumEnv:
         upright = abs(self.theta) < 0.2
         if self.better_reward:
             if upright:
+                # more reward for being close to upright (0 rads), and for being gentle (low speed and low torque)
                 gentleness = max(
                     0.0, 1.0 - self.theta_dot**2 - (torque / MAX_TORQUE) ** 2
                 )
-                return 1.0 + gentleness
+                closer_to_upright = 1.0 - abs(self.theta) / math.pi
+                return 1.0 + gentleness + 2 * closer_to_upright
             return 0.0
         return 1.0 if upright else 0.0

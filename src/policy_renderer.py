@@ -69,10 +69,10 @@ class PolicyRenderer:
         pygame.draw.rect(surface, self.bg, rect)
         pygame.draw.line(surface, self.hint_c, (rx, ry), (rx, ry + rh), 1)
 
-        cell = min((rw - 2 * pad) // self.n_actions, (rh - 2 * pad) // self.n_states)
-        map_w = self.n_actions * cell
-        map_h = self.n_states * cell
-        ox = rx + (rw - map_w) // 2
+        cell_h = (rh - 2 * pad) // self.n_states
+        map_h = self.n_states * cell_h
+        map_w = rw - 2 * pad
+        ox = rx + pad
         oy = max(ry + pad // 2, ry + rh - map_h - below)
 
         # ── Q-value heatmap ───────────────────────────────────────────────────
@@ -123,9 +123,11 @@ class PolicyRenderer:
         pygame.draw.rect(surface, (40, 42, 54), (ox, freq_y, map_w, freq_h))
         max_count = max(action_counts.max(), 1)
         for i, count in enumerate(action_counts):
+            x0 = ox + i * map_w // self.n_actions
+            x1 = ox + (i + 1) * map_w // self.n_actions
             iv = int(255 * count / max_count)
             color = self.current_c if i == current_act else (iv, iv, iv)
-            pygame.draw.rect(surface, color, (ox + i * cell, freq_y, cell, freq_h))
+            pygame.draw.rect(surface, color, (x0, freq_y, x1 - x0, freq_h))
 
         # Freq row X-axis labels — centered on the same x positions as the Q-heatmap ticks
         label_y = freq_y + freq_h + 4
