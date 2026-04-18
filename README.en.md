@@ -2,7 +2,7 @@
 
 An interactive laboratory for experimenting with reinforcement learning algorithms. Currently features a Q-learning agent learning to balance an inverted pendulum with real-time visualization.
 
-![Training mode showing pendulum and Q-table heatmap](assets/q-learning-pendulum.mov)
+![Training mode showing pendulum and Q-table heatmap](assets/q-learning-pendulum.gif)
 
 ## Overview
 
