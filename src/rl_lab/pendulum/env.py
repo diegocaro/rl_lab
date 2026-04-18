@@ -8,7 +8,7 @@ import math
 
 import numpy as np
 
-from pendulum.physics import MAX_TORQUE, Pendulum
+from rl_lab.pendulum.physics import MAX_TORQUE, Pendulum
 
 
 class PendulumEnv:
