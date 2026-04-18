@@ -24,7 +24,8 @@ class PolicyRenderer:
         action_range: tuple,  # (min_value, max_value) shown on X-axis
         action_name: str,  # X-axis label, e.g. "torque"
         state_ticks: list,  # [(frac_0_to_1, label_str), ...] for Y-axis
-        action_ticks: list | None = None,  # [(frac, label), ...] for X-axis; auto if None
+        action_ticks: list
+        | None = None,  # [(frac, label), ...] for X-axis; auto if None
         q_title: str = "Q-value  (brighter = higher)",
         freq_title: str = "applied torque  (brighter=most frequent)",
         bg: tuple = (15, 17, 26),
@@ -41,7 +42,12 @@ class PolicyRenderer:
             a_min, a_max = action_range
             span = a_max - a_min
             action_ticks = [
-                (i / 4, "0" if (a_min + i * span / 4) == 0 else f"{a_min + i * span / 4:+.0f}")
+                (
+                    i / 4,
+                    "0"
+                    if (a_min + i * span / 4) == 0
+                    else f"{a_min + i * span / 4:+.0f}",
+                )
                 for i in range(5)
             ]
         self.action_ticks = action_ticks
@@ -108,7 +114,9 @@ class PolicyRenderer:
         q_label_y = oy + map_h + 6
         for frac, label in self.action_ticks:
             xp = ox + int(frac * map_w)
-            pygame.draw.line(surface, self.hint_c, (xp, oy + map_h), (xp, oy + map_h + 4), 1)
+            pygame.draw.line(
+                surface, self.hint_c, (xp, oy + map_h), (xp, oy + map_h + 4), 1
+            )
             lbl = self._font.render(label, True, self.hint_c)
             surface.blit(lbl, (xp - lbl.get_width() // 2, q_label_y))
 

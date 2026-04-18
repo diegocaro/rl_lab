@@ -11,11 +11,11 @@ import math
 import numpy as np
 import pygame
 
-from pendulum import MAX_TORQUE, PendulumRenderer
-from pendulum_env import PendulumEnv
-from policy_renderer import PolicyRenderer
-from q_agent import QLearningAgent
-from simulation import Simulation
+from pendulum.physics import MAX_TORQUE, PendulumRenderer
+from pendulum.env import PendulumEnv
+from engine.policy_renderer import PolicyRenderer
+from agents.q_agent import QLearningAgent
+from engine.simulation import Simulation
 
 # ── Layout ────────────────────────────────────────────────────────────────────
 _W_SIM, _W_POLICY, _H = 600, 400, 550

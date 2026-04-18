@@ -15,7 +15,7 @@ import time
 import numpy as np
 import pygame
 
-from simulation import Simulation
+from engine.simulation import Simulation
 
 
 def run(sim: Simulation) -> None:
@@ -112,6 +112,6 @@ def run(sim: Simulation) -> None:
 
 if __name__ == "__main__":
     pygame.init()
-    from pendulum_sim import make_pendulum_sim
+    from pendulum.sim import make_pendulum_sim
 
     run(make_pendulum_sim())
