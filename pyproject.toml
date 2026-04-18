@@ -8,3 +8,31 @@ dependencies = [
     "numpy>=2.4.4",
     "pygame>=2.6.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.1",
+]
+
+
+#[tool.uv]
+#package = true
+
+[tool.ruff]
+fix = true
+target-version = "py313"
+
+[tool.ruff.lint]
+extend-select = [
+    "UP", # modernize python
+    "RUF", # ruff specific rules
+]
+extend-ignore = [
+    "E731", # lambda assignment
+    "RUF002", # disable checks for ambiguous Unicode characters in docstrings
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"

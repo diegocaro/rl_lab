@@ -13,7 +13,7 @@ import pygame
 
 
 class PolicyRenderer:
-    _PAD = 40    # inner margin
+    _PAD = 40  # inner margin
     _BELOW = 70  # pixels reserved below heatmap for freq row + labels
     _FREQ_H = 12  # height of the frequency strip
 
@@ -21,9 +21,9 @@ class PolicyRenderer:
         self,
         n_states: int,
         n_actions: int,
-        action_range: tuple,   # (min_value, max_value) shown on X-axis
-        action_name: str,      # X-axis label, e.g. "torque"
-        state_ticks: list,     # [(frac_0_to_1, label_str), ...] for Y-axis
+        action_range: tuple,  # (min_value, max_value) shown on X-axis
+        action_name: str,  # X-axis label, e.g. "torque"
+        state_ticks: list,  # [(frac_0_to_1, label_str), ...] for Y-axis
         q_title: str = "Q-value  (brighter = higher)",
         freq_title: str = "applied torque  (brighter=most frequent)",
         bg: tuple = (15, 17, 26),
@@ -47,12 +47,12 @@ class PolicyRenderer:
     def draw(
         self,
         surface: pygame.Surface,
-        rect: tuple,                  # (x, y, w, h)
-        q2d: np.ndarray,              # (n_states, n_actions)
-        state_frac: float,            # 0=top … 1=bottom, where to draw the marker
-        action_counts: np.ndarray,    # (n_actions,) int counts this episode
-        current_act: int,             # index of the action just taken
-        state_label: str = "",        # optional text shown next to the marker line
+        rect: tuple,  # (x, y, w, h)
+        q2d: np.ndarray,  # (n_states, n_actions)
+        state_frac: float,  # 0=top … 1=bottom, where to draw the marker
+        action_counts: np.ndarray,  # (n_actions,) int counts this episode
+        current_act: int,  # index of the action just taken
+        state_label: str = "",  # optional text shown next to the marker line
     ) -> None:
         rx, ry, rw, rh = rect
         pad, below, freq_h = self._PAD, self._BELOW, self._FREQ_H
@@ -68,10 +68,14 @@ class PolicyRenderer:
 
         # ── Q-value heatmap ───────────────────────────────────────────────────
         q_min, q_max = q2d.min(), q2d.max()
-        q_norm = (q2d - q_min) / (q_max - q_min) if q_max > q_min else np.zeros_like(q2d)
+        q_norm = (
+            (q2d - q_min) / (q_max - q_min) if q_max > q_min else np.zeros_like(q2d)
+        )
         intensity = (q_norm.T * 255).astype(np.uint8)  # (n_actions, n_states)
         rgb = np.stack([intensity, intensity, intensity], axis=2)[:, ::-1, :]
-        scaled = pygame.transform.scale(pygame.surfarray.make_surface(rgb), (map_w, map_h))
+        scaled = pygame.transform.scale(
+            pygame.surfarray.make_surface(rgb), (map_w, map_h)
+        )
         surface.blit(scaled, (ox, oy))
 
         lbl = self._font.render(self.q_title, True, self.text_c)
@@ -99,7 +103,9 @@ class PolicyRenderer:
         # ── Frequency row ─────────────────────────────────────────────────────
         freq_title_lbl = self._font.render(self.freq_title, True, self.text_c)
         title_y = q_label_y + lbl.get_height() + 4
-        surface.blit(freq_title_lbl, (ox + map_w // 2 - freq_title_lbl.get_width() // 2, title_y))
+        surface.blit(
+            freq_title_lbl, (ox + map_w // 2 - freq_title_lbl.get_width() // 2, title_y)
+        )
 
         freq_y = title_y + freq_title_lbl.get_height() + 2
         max_count = max(action_counts.max(), 1)

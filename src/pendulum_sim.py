@@ -23,19 +23,19 @@ _CX, _CY = _W_SIM // 2, 260
 _PX_LEN = 180
 
 # ── Colours ───────────────────────────────────────────────────────────────────
-_BG       = (15, 17, 26)
-_HINT_C   = (90, 100, 120)
+_BG = (15, 17, 26)
+_HINT_C = (90, 100, 120)
 _BOB_UP_C = (80, 255, 140)
 _TORQUE_C = (255, 180, 50)
-_TEXT_C   = (200, 210, 230)
-_WARN_C   = (255, 80, 80)
-_GRID_C   = (30, 35, 50)
+_TEXT_C = (200, 210, 230)
+_WARN_C = (255, 80, 80)
+_GRID_C = (30, 35, 50)
 
 # ── Hyper-parameters ──────────────────────────────────────────────────────────
-_N_ANGLE  = 32
-_N_SPEED  = 16
+_N_ANGLE = 32
+_N_SPEED = 16
 _MAX_SPEED = 20.0
-_ACTIONS  = np.linspace(-MAX_TORQUE, MAX_TORQUE, 20)
+_ACTIONS = np.linspace(-MAX_TORQUE, MAX_TORQUE, 20)
 
 _angle_bins = np.linspace(-math.pi, math.pi, _N_ANGLE + 1)
 _speed_bins = np.linspace(-_MAX_SPEED, _MAX_SPEED, _N_SPEED + 1)
@@ -49,22 +49,22 @@ def _make_discretize(use_speed: bool):
             v = int(np.clip(np.digitize(theta_dot, _speed_bins) - 1, 0, _N_SPEED - 1))
             return (a, v)
         return (a,)
+
     return discretize
 
 
 class PendulumSim(Simulation):
-
     def __init__(self, use_speed: bool = True, better_reward: bool = False):
         self._use_speed = use_speed
 
         # Required Simulation attributes
-        self.env            = PendulumEnv(better_reward=better_reward)
-        self.actions        = _ACTIONS
-        self.max_steps      = 500
-        self.fps            = 60
-        self.window_size    = (_W_SIM + _W_POLICY, _H)
-        self.sim_rect       = (0, 0, _W_SIM, _H)
-        self.policy_rect    = (_W_SIM, 0, _W_POLICY, _H)
+        self.env = PendulumEnv(better_reward=better_reward)
+        self.actions = _ACTIONS
+        self.max_steps = 500
+        self.fps = 60
+        self.window_size = (_W_SIM + _W_POLICY, _H)
+        self.sim_rect = (0, 0, _W_SIM, _H)
+        self.policy_rect = (_W_SIM, 0, _W_POLICY, _H)
 
         q_shape = (_N_ANGLE, _N_SPEED) if use_speed else (_N_ANGLE,)
         self.agent = QLearningAgent(
@@ -79,26 +79,33 @@ class PendulumSim(Simulation):
             action_range=(-MAX_TORQUE, MAX_TORQUE),
             action_name="torque",
             state_ticks=[
-                (0.0,  "+pi  "),
+                (0.0, "+pi  "),
                 (0.25, "+pi/2"),
-                (0.5,  "  0  "),
+                (0.5, "  0  "),
                 (0.75, "-pi/2"),
-                (1.0,  "-pi  "),
+                (1.0, "-pi  "),
             ],
         )
 
         self._pend_renderer = PendulumRenderer(
             width=_W_SIM, height=_H, cx=_CX, cy=_CY, scale=_PX_LEN, show_hud=True
         )
-        self._fonts: dict | None = None
+        self._fonts = {
+            "big": pygame.font.SysFont("monospace", 22, bold=True),
+            "med": pygame.font.SysFont("monospace", 16),
+            "sml": pygame.font.SysFont("monospace", 13),
+        }
 
     # ── Simulation protocol ───────────────────────────────────────────────────
 
-    def render_panel(self, surface, last_act_idx, episode, step, reward_total, training, fps_actual):
-        self._ensure_fonts()
+    def render_panel(
+        self, surface, last_act_idx, episode, step, reward_total, training, fps_actual
+    ):
         last_torque = self.actions[last_act_idx]
 
-        self._pend_renderer.draw(self.env.theta, self.env.theta_dot, last_torque, self.env.theta_ddot)
+        self._pend_renderer.draw(
+            self.env.theta, self.env.theta_dot, last_torque, self.env.theta_ddot
+        )
         surface.blit(self._pend_renderer.surface, (0, 0))
 
         for r in range(50, 300, 50):
@@ -106,14 +113,20 @@ class PendulumSim(Simulation):
         for deg in range(0, 360, 30):
             rad = math.radians(deg)
             pygame.draw.line(
-                surface, _GRID_C, (_CX, _CY),
-                (_CX + int(250 * math.cos(rad)), _CY + int(250 * math.sin(rad))), 1,
+                surface,
+                _GRID_C,
+                (_CX, _CY),
+                (_CX + int(250 * math.cos(rad)), _CY + int(250 * math.sin(rad))),
+                1,
             )
 
         pygame.draw.arc(
-            surface, (40, 80, 40),
+            surface,
+            (40, 80, 40),
             (_CX - _PX_LEN, _CY - _PX_LEN, 2 * _PX_LEN, 2 * _PX_LEN),
-            math.pi / 2 - 0.2, math.pi / 2 + 0.2, 4,
+            math.pi / 2 - 0.2,
+            math.pi / 2 + 0.2,
+            4,
         )
 
         if last_torque != 0:
@@ -123,32 +136,42 @@ class PendulumSim(Simulation):
             if start > end:
                 start, end = end, start
             pygame.draw.arc(
-                surface, _TORQUE_C,
+                surface,
+                _TORQUE_C,
                 (_CX - arc_r, _CY - arc_r, 2 * arc_r, 2 * arc_r),
-                start, end, 3,
+                start,
+                end,
+                3,
             )
 
         mode_str = "TRAINING" if training else "WATCHING"
         mode_col = _WARN_C if training else _BOB_UP_C
         mode_surf = self._fonts["big"].render(mode_str, True, mode_col)
-        surface.blit(mode_surf, (_W_SIM - mode_surf.get_width() - 20, _H - mode_surf.get_height() - 20))
+        surface.blit(
+            mode_surf,
+            (_W_SIM - mode_surf.get_width() - 20, _H - mode_surf.get_height() - 20),
+        )
 
         lh, y0 = 22, 330
 
         def txt(label, value, col=_TEXT_C):
             nonlocal y0
-            surface.blit(self._fonts["med"].render(f"{label:<14}{value}", True, col), (30, y0))
+            surface.blit(
+                self._fonts["med"].render(f"{label:<14}{value}", True, col), (30, y0)
+            )
             y0 += lh
 
         txt("Episode:", f"{episode}")
-        txt("Step:",    f"{step}/{self.max_steps}")
-        txt("State:",   "angle+speed" if self._use_speed else "angle only", col=_HINT_C)
+        txt("Step:", f"{step}/{self.max_steps}")
+        txt("State:", "angle+speed" if self._use_speed else "angle only", col=_HINT_C)
         txt("Upright:", f"{reward_total:.0f} steps")
         txt("Epsilon:", f"{self.agent.epsilon:.3f}")
-        txt("FPS:",     f"{fps_actual:.0f}")
+        txt("FPS:", f"{fps_actual:.0f}")
 
         surface.blit(
-            self._fonts["sml"].render("SPACE: train/watch   R: reset   Q: quit", True, _HINT_C),
+            self._fonts["sml"].render(
+                "SPACE: train/watch   R: reset   Q: quit", True, _HINT_C
+            ),
             (30, _H - 30),
         )
 
@@ -163,27 +186,24 @@ class PendulumSim(Simulation):
     def q2d(self) -> np.ndarray:
         return self.agent.Q.max(axis=1) if self._use_speed else self.agent.Q
 
-    # ── Private ───────────────────────────────────────────────────────────────
-
-    def _ensure_fonts(self):
-        if self._fonts is None:
-            self._fonts = {
-                "big": pygame.font.SysFont("monospace", 22, bold=True),
-                "med": pygame.font.SysFont("monospace", 16),
-                "sml": pygame.font.SysFont("monospace", 13),
-            }
-
 
 # ── Factory ───────────────────────────────────────────────────────────────────
+
 
 def make_pendulum_sim() -> PendulumSim:
     """Parse pendulum-specific CLI args and return a ready-to-run PendulumSim."""
     parser = argparse.ArgumentParser(description="Q-Learning Pendulum Balancer")
-    parser.add_argument("--no-speed", action="store_true",
-                        help="Angle-only Q-table (ignore angular velocity).")
+    parser.add_argument(
+        "--no-speed",
+        action="store_true",
+        help="Angle-only Q-table (ignore angular velocity).",
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--simple-reward", action="store_true")
-    group.add_argument("--better-reward", action="store_true",
-                       help="Gentleness bonus to reduce jitter.")
+    group.add_argument(
+        "--better-reward",
+        action="store_true",
+        help="Gentleness bonus to reduce jitter.",
+    )
     args = parser.parse_args()
     return PendulumSim(use_speed=not args.no_speed, better_reward=args.better_reward)

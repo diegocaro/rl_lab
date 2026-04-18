@@ -204,7 +204,6 @@ class PendulumRenderer:
 
     def get_frame(self):
         """Return the current surface as a (H, W, 3) numpy array."""
-        import numpy as np
         import pygame
 
         return pygame.surfarray.array3d(self.surface).transpose(1, 0, 2)

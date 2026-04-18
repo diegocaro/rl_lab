@@ -29,7 +29,9 @@ class PendulumEnv:
 
     def step(self, torque: float) -> tuple:
         """Advance one timestep. Returns ((theta, theta_dot), reward, done)."""
-        self.theta, self.theta_dot, self.theta_ddot, terminated = self._phys.step(torque)
+        self.theta, self.theta_dot, self.theta_ddot, terminated = self._phys.step(
+            torque
+        )
         reward = self._reward(torque, terminated)
         return (self.theta, self.theta_dot), reward, terminated
 
@@ -39,7 +41,9 @@ class PendulumEnv:
         upright = abs(self.theta) < 0.2
         if self.better_reward:
             if upright:
-                gentleness = max(0.0, 1.0 - self.theta_dot ** 2 - (torque / MAX_TORQUE) ** 2)
+                gentleness = max(
+                    0.0, 1.0 - self.theta_dot**2 - (torque / MAX_TORQUE) ** 2
+                )
                 return 1.0 + gentleness
             return 0.0
         return 1.0 if upright else 0.0

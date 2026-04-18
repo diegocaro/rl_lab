@@ -77,12 +77,16 @@ def run(sim: Simulation) -> None:
             action_counts[:] = 0
 
         # ── Render ────────────────────────────────────────────────────────────
-        sim.render_panel(screen, last_act_idx, episode, step, reward_total, training, fps_actual)
+        sim.render_panel(
+            screen, last_act_idx, episode, step, reward_total, training, fps_actual
+        )
         sim.policy_renderer.draw(
-            screen, sim.policy_rect,
+            screen,
+            sim.policy_rect,
             sim.q2d(),
             sim.state_frac(obs),
-            action_counts, last_act_idx,
+            action_counts,
+            last_act_idx,
             state_label=sim.state_label(obs),
         )
         pygame.display.flip()
@@ -97,4 +101,5 @@ def run(sim: Simulation) -> None:
 if __name__ == "__main__":
     pygame.init()
     from pendulum_sim import make_pendulum_sim
+
     run(make_pendulum_sim())

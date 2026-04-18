@@ -5,7 +5,7 @@ State discretisation is injected as a callable so the agent works with
 any discrete or discretised state representation.
 """
 
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 
@@ -13,9 +13,9 @@ import numpy as np
 class QLearningAgent:
     def __init__(
         self,
-        q_shape: tuple,              # one int per state dimension, e.g. (32, 16)
+        q_shape: tuple,  # one int per state dimension, e.g. (32, 16)
         n_actions: int,
-        discretize: Callable,        # obs -> state tuple, e.g. (angle_bin, speed_bin)
+        discretize: Callable,  # obs -> state tuple, e.g. (angle_bin, speed_bin)
         alpha: float = 0.15,
         gamma: float = 0.99,
         epsilon_start: float = 1.0,
@@ -29,7 +29,7 @@ class QLearningAgent:
         self.epsilon = epsilon_start
         self._epsilon_end = epsilon_end
         self._epsilon_decay = epsilon_decay
-        self.Q = np.zeros(q_shape + (n_actions,))
+        self.Q = np.zeros((*q_shape, n_actions))
 
     def act(self, obs, explore: bool = True) -> int:
         """Return an action index, epsilon-greedy when explore=True."""
@@ -42,8 +42,8 @@ class QLearningAgent:
         state = self._discretize(obs)
         next_state = self._discretize(next_obs)
         best_next = np.max(self.Q[next_state])
-        self.Q[state + (act_idx,)] += self.alpha * (
-            reward + self.gamma * best_next - self.Q[state + (act_idx,)]
+        self.Q[(*state, act_idx)] += self.alpha * (
+            reward + self.gamma * best_next - self.Q[(*state, act_idx)]
         )
 
     def end_episode(self) -> None:
