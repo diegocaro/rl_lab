@@ -28,7 +28,7 @@ class Simulation(ABC):
         step: int,
         reward_total: float,
         training: bool,
-        fps_actual: float,
+        sps_actual: float,
     ) -> None:
         """Draw the simulation-specific left panel onto surface."""
 

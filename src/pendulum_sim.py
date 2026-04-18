@@ -99,7 +99,7 @@ class PendulumSim(Simulation):
     # ── Simulation protocol ───────────────────────────────────────────────────
 
     def render_panel(
-        self, surface, last_act_idx, episode, step, reward_total, training, fps_actual
+        self, surface, last_act_idx, episode, step, reward_total, training, sps_actual
     ):
         last_torque = self.actions[last_act_idx]
 
@@ -166,7 +166,7 @@ class PendulumSim(Simulation):
         txt("State:", "angle+speed" if self._use_speed else "angle only", col=_HINT_C)
         txt("Upright:", f"{reward_total:.0f} steps")
         txt("Epsilon:", f"{self.agent.epsilon:.3f}")
-        txt("FPS:", f"{fps_actual:.0f}")
+        txt("SPS:", f"{sps_actual:.0f}")
 
         surface.blit(
             self._fonts["sml"].render(

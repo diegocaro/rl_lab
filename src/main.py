@@ -23,16 +23,20 @@ def run(sim: Simulation) -> None:
     pygame.display.set_caption("Q-Learning")
     clock = pygame.time.Clock()
 
+    _TRAIN_RENDER_INTERVAL = 1.0 / 30  # cap render at 30 fps during training
+
     training = True
     episode = 0
-    fps_actual = 0.0
-
+    steps_this_second = 0
+    sps_actual = 0.0  # steps per second
     obs = sim.env.reset()
     step = 0
     reward_total = 0.0
     last_act_idx = 0
     action_counts = np.zeros(sim.agent.n_actions, dtype=int)
     t_last = time.perf_counter()
+    t_render = t_last
+    t_sps = t_last
 
     while True:
         # ── Events ────────────────────────────────────────────────────────────
@@ -61,6 +65,7 @@ def run(sim: Simulation) -> None:
         next_obs, reward, done = sim.env.step(action)
         reward_total += reward
         step += 1
+        steps_this_second += 1
 
         if training:
             sim.agent.learn(obs, act_idx, reward, next_obs)
@@ -76,25 +81,32 @@ def run(sim: Simulation) -> None:
             reward_total = 0.0
             action_counts[:] = 0
 
-        # ── Render ────────────────────────────────────────────────────────────
-        sim.render_panel(
-            screen, last_act_idx, episode, step, reward_total, training, fps_actual
-        )
-        sim.policy_renderer.draw(
-            screen,
-            sim.policy_rect,
-            sim.q2d(),
-            sim.state_frac(obs),
-            action_counts,
-            last_act_idx,
-            state_label=sim.state_label(obs),
-        )
-        pygame.display.flip()
+        # ── Render (time-gated during training) ───────────────────────────────
+        now = time.perf_counter()
+        if now - t_sps >= 1.0:
+            sps_actual = steps_this_second / (now - t_sps)
+            steps_this_second = 0
+            t_sps = now
+
+        if not training or (now - t_render) >= _TRAIN_RENDER_INTERVAL:
+            sim.render_panel(
+                screen, last_act_idx, episode, step, reward_total, training, sps_actual
+            )
+            sim.policy_renderer.draw(
+                screen,
+                sim.policy_rect,
+                sim.q2d(),
+                sim.state_frac(obs),
+                action_counts,
+                last_act_idx,
+                state_label=sim.state_label(obs),
+            )
+            pygame.display.flip()
+            t_render = now
 
         # ── Timing ────────────────────────────────────────────────────────────
-        clock.tick(0 if training else sim.fps)
-        now = time.perf_counter()
-        fps_actual = 1.0 / max(now - t_last, 1e-6)
+        if not training:
+            clock.tick(sim.fps)
         t_last = now
 
 
